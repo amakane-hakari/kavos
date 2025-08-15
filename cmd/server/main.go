@@ -10,12 +10,15 @@ import (
 	"time"
 
 	apphttp "github.com/amakane-hakari/kavos/internal/api/http"
+	"github.com/amakane-hakari/kavos/internal/store"
 )
 
 func main() {
 	addr := getEnv("KAVOS_HTTP_ADDR", ":8080")
 
-	router := apphttp.NewRouter()
+	st := store.New()
+
+	router := apphttp.NewRouter(st)
 
 	srv := &http.Server{
 		Addr:    addr,

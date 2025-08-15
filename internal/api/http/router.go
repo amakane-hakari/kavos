@@ -5,11 +5,16 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/amakane-hakari/kavos/internal/store"
 )
 
-func NewRouter() http.Handler {
+func NewRouter(st *store.Store) http.Handler {
 	r := chi.NewRouter()
 	r.Get("/health", healthHandler)
+
+	kv := &kvHandler{st: st}
+	kv.mount(r)
+
 	return r
 }
 
