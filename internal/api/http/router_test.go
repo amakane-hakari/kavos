@@ -15,6 +15,22 @@ func newTestServer() http.Handler {
 	return NewRouter(st)
 }
 
+type successWrap[T any] struct {
+	Data T `json:"data"`
+}
+
+type kvData struct {
+	Key   string `json:"key"`
+	Value string `json:"value,omitempty"`
+}
+
+type errorWrap struct {
+	Error struct {
+		Code    string `json:"code"`
+		Message string `json:"message"`
+	} `json:"error"`
+}
+
 func TestHealth(t *testing.T) {
 	ts := httptest.NewServer(newTestServer())
 	defer ts.Close()
@@ -25,6 +41,13 @@ func TestHealth(t *testing.T) {
 	}
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+	var sw successWrap[map[string]string]
+	if err := json.NewDecoder(resp.Body).Decode(&sw); err != nil {
+		t.Fatalf("decode error: %v", err)
+	}
+	if sw.Data["status"] != "ok" {
+		t.Fatalf("expected status 'ok', got '%v'", sw.Data)
 	}
 }
 
@@ -43,6 +66,13 @@ func TestKVS_CRUD(t *testing.T) {
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("put status %d", res.StatusCode)
 	}
+	var putResp successWrap[kvData]
+	if err := json.NewDecoder(res.Body).Decode(&putResp); err != nil {
+		t.Fatalf("decode put: %v", err)
+	}
+	if putResp.Data.Key != "foo" || putResp.Data.Value != "bar" {
+		t.Fatalf("unexpected put data %+v", putResp.Data)
+	}
 
 	// GET
 	getRes, err := http.Get(ts.URL + "/kvs/foo")
@@ -52,12 +82,12 @@ func TestKVS_CRUD(t *testing.T) {
 	if getRes.StatusCode != http.StatusOK {
 		t.Fatalf("get status %d", getRes.StatusCode)
 	}
-	var vr valueResponse
-	if err := json.NewDecoder(getRes.Body).Decode(&vr); err != nil {
+	var getResp successWrap[kvData]
+	if err := json.NewDecoder(getRes.Body).Decode(&getResp); err != nil {
 		t.Fatalf("get decode error: %v", err)
 	}
-	if vr.Value != "bar" {
-		t.Fatalf("expected value 'bar', got '%s'", vr.Value)
+	if getResp.Data.Value != "bar" {
+		t.Fatalf("unexpected value bar got %q", getResp.Data.Value)
 	}
 
 	// DELETE
@@ -69,6 +99,13 @@ func TestKVS_CRUD(t *testing.T) {
 	if delRes.StatusCode != http.StatusOK {
 		t.Fatalf("delete status %d", delRes.StatusCode)
 	}
+	var delResp successWrap[kvData]
+	if err := json.NewDecoder(delRes.Body).Decode(&delResp); err != nil {
+		t.Fatalf("decode delete: %v", err)
+	}
+	if delResp.Data.Key != "foo" {
+		t.Fatalf("unexpected delete key %s", delResp.Data.Key)
+	}
 
 	// GET again (not found)
 	getRes2, err := http.Get(ts.URL + "/kvs/foo")
@@ -77,5 +114,12 @@ func TestKVS_CRUD(t *testing.T) {
 	}
 	if getRes2.StatusCode != http.StatusNotFound {
 		t.Fatalf("expected 404, got %d", getRes2.StatusCode)
+	}
+	var errResp errorWrap
+	if err := json.NewDecoder(getRes2.Body).Decode(&errResp); err != nil {
+		t.Fatalf("decode error: %v", err)
+	}
+	if errResp.Error.Code != "NOT_FOUND" {
+		t.Fatalf("expected NOT_FOUND got %s", errResp.Error.Code)
 	}
 }
