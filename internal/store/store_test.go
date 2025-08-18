@@ -8,7 +8,7 @@ import (
 )
 
 func TestStore_SetGetDelete(t *testing.T) {
-	s := New()
+	s := New[string, string]()
 
 	s.Set("foo", "bar")
 	if v, ok := s.Get("foo"); !ok || v != "bar" {
@@ -26,7 +26,7 @@ func TestStore_SetGetDelete(t *testing.T) {
 }
 
 func TestStore_Concurrency(t *testing.T) {
-	s := New()
+	s := New[string, string]()
 	const n = 1000
 	var wg sync.WaitGroup
 
@@ -50,7 +50,7 @@ func TestStore_Concurrency(t *testing.T) {
 }
 
 func TestStore_TTLExpiration(t *testing.T) {
-	s := New()
+	s := New[string, string]()
 	s.SetWithTTL("ephemeral", "x", 50*time.Millisecond)
 
 	if v, ok := s.Get("ephemeral"); !ok || v != "x" {

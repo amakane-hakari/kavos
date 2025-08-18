@@ -16,7 +16,7 @@ import (
 func main() {
 	addr := getEnv("KAVOS_HTTP_ADDR", ":8080")
 
-	st := store.New()
+	st := store.New[string, string]()
 
 	router := apphttp.NewRouter(st)
 

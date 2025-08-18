@@ -12,7 +12,7 @@ import (
 )
 
 func newTestServer() http.Handler {
-	st := store.New()
+	st := store.New[string, string]()
 	return NewRouter(st)
 }
 
@@ -126,7 +126,7 @@ func TestKVS_CRUD(t *testing.T) {
 }
 
 func TestKVS_TTL(t *testing.T) {
-	ts := httptest.NewServer(NewRouter(store.New()))
+	ts := httptest.NewServer(NewRouter(store.New[string, string]()))
 	defer ts.Close()
 
 	// PUT with ttl=1(1秒)

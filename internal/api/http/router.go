@@ -7,7 +7,7 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-func NewRouter(st *store.Store) http.Handler {
+func NewRouter(st *store.Store[string, string]) http.Handler {
 	r := chi.NewRouter()
 	r.Use(requestIDMiddleware, recoverMiddleware)
 

@@ -11,7 +11,7 @@ import (
 )
 
 type kvHandler struct {
-	st *store.Store
+	st *store.Store[string, string]
 }
 
 func (h *kvHandler) mount(r chi.Router) {
