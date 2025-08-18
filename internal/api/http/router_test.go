@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/amakane-hakari/kavos/internal/store"
 )
@@ -121,5 +122,36 @@ func TestKVS_CRUD(t *testing.T) {
 	}
 	if errResp.Error.Code != "NOT_FOUND" {
 		t.Fatalf("expected NOT_FOUND got %s", errResp.Error.Code)
+	}
+}
+
+func TestKVS_TTL(t *testing.T) {
+	ts := httptest.NewServer(NewRouter(store.New()))
+	defer ts.Close()
+
+	// PUT with ttl=1(1秒)
+	reqBody := bytes.NewBufferString(`{"value":"bar"}`)
+	req, _ := http.NewRequest(http.MethodPut, ts.URL+"/kvs/tmp?ttl=1", reqBody)
+	req.Header.Set("Content-Type", "application/json")
+	if resp, err := http.DefaultClient.Do(req); err != nil || resp.StatusCode != http.StatusOK {
+		t.Fatalf("put ttl failed: %v code=%v", err, resp.StatusCode)
+	}
+
+	// Immediately get (should exist)
+	if resp, err := http.Get(ts.URL + "/kvs/tmp"); err != nil || resp.StatusCode != http.StatusOK {
+		t.Fatalf("get before expiry failed: %v code=%v", err, resp.StatusCode)
+	}
+
+	time.Sleep(1100 * time.Millisecond)
+
+	// After expiry
+	resp, err := http.Get(ts.URL + "/kvs/tmp")
+	if err != nil {
+		t.Fatalf("get after expiry error: %v", err)
+	}
+	if resp.StatusCode != http.StatusNotFound {
+		var dbg map[string]any
+		_ = json.NewDecoder(resp.Body).Decode(&dbg)
+		t.Fatalf("expected 404 got %d body=%v", resp.StatusCode, dbg)
 	}
 }

@@ -3,9 +3,11 @@ package http
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
+	"time"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/amakane-hakari/kavos/internal/store"
+	"github.com/go-chi/chi/v5"
 )
 
 type kvHandler struct {
@@ -48,7 +50,21 @@ func (h *kvHandler) put(w http.ResponseWriter, r *http.Request) error {
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		return BadRequest("invalid json")
 	}
-	h.st.Set(key, req.Value)
+
+	var ttlDur time.Duration
+	if raw := r.URL.Query().Get("ttl"); raw != "" {
+		sec, err := strconv.ParseInt(raw, 10, 64)
+		if err == nil && sec > 0 {
+			ttlDur = time.Duration(sec) * time.Second
+		}
+	}
+
+	if ttlDur > 0 {
+		h.st.SetWithTTL(key, req.Value, ttlDur)
+	} else {
+		h.st.Set(key, req.Value)
+	}
+
 	writeSuccess(w, http.StatusOK, valueDTO{Key: key, Value: req.Value})
 	return nil
 }

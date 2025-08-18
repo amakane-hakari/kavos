@@ -4,6 +4,7 @@ import (
 	"strconv"
 	"sync"
 	"testing"
+	"time"
 )
 
 func TestStore_SetGetDelete(t *testing.T) {
@@ -45,5 +46,20 @@ func TestStore_Concurrency(t *testing.T) {
 
 	if l := s.Len(); l != 0 {
 		t.Fatalf("expected len=0 got %d", l)
+	}
+}
+
+func TestStore_TTLExpiration(t *testing.T) {
+	s := New()
+	s.SetWithTTL("ephemeral", "x", 50*time.Millisecond)
+
+	if v, ok := s.Get("ephemeral"); !ok || v != "x" {
+		t.Fatalf("expected present before expiry")
+	}
+
+	time.Sleep(70 * time.Millisecond)
+
+	if _, ok := s.Get("ephemeral"); ok {
+		t.Fatalf("expected expired key")
 	}
 }
