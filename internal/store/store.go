@@ -18,7 +18,8 @@ type shard[K comparable, V any] struct {
 }
 
 type Config struct {
-	Shards int // 2 の冪推奨。0/未指定なら 16
+	Shards          int           // 2 の冪推奨。0/未指定なら 16
+	CleanupInterval time.Duration // 0 で無効
 }
 
 type Option func(*Config)
@@ -27,10 +28,17 @@ func WithShards(n int) Option {
 	return func(c *Config) { c.Shards = n }
 }
 
+func WithCleanupInterval(d time.Duration) Option {
+	return func(c *Config) { c.CleanupInterval = d }
+}
+
 type Store[K comparable, V any] struct {
-	cfg       Config
-	shards    []shard[K, V]
-	shardMask uint32 // Shards が 2^n の場合（hash & mask）で index
+	cfg             Config
+	shards          []shard[K, V]
+	shardMask       uint32 // Shards が 2^n の場合（hash & mask）で index
+	cleanupInterval time.Duration // 0 で無効
+	stopCh          chan struct{}
+	wg              sync.WaitGroup
 }
 
 func New[K comparable, V any](opts ...Option) *Store[K, V] {
@@ -46,11 +54,18 @@ func New[K comparable, V any](opts ...Option) *Store[K, V] {
 
 	s := &Store[K, V]{
 		cfg:       cfg,
-		shards:    make([]shard[K, V], cfg.Shards),
-		shardMask: uint32(cfg.Shards - 1),
+		shards:          make([]shard[K, V], cfg.Shards),
+		shardMask:       uint32(cfg.Shards - 1),
+		cleanupInterval: cfg.CleanupInterval,
 	}
 	for i := range s.shards {
 		s.shards[i].m = make(map[K]entry[V])
+	}
+
+	if s.cleanupInterval > 0 {
+		s.stopCh = make(chan struct{})
+		s.wg.Add(1)
+		go s.cleanupLoop()
 	}
 
 	return s
@@ -116,6 +131,42 @@ func (s *Store[K, V]) Len() int {
 		sh.mu.RUnlock()
 	}
 	return total
+}
+
+func (s *Store[K, V]) Close() {
+	if s.stopCh == nil {
+		return
+	}
+	close(s.stopCh)
+	s.wg.Wait()
+}
+
+func (s *Store[K, V]) cleanupLoop() {
+	defer s.wg.Done()
+	t := time.NewTicker(s.cleanupInterval)
+	defer t.Stop()
+	for {
+		select {
+		case <-t.C:
+			s.scanExpired()
+		case <-s.stopCh:
+			return
+		}
+	}
+}
+
+func (s *Store[K, V]) scanExpired() {
+	now := time.Now().UnixNano()
+	for i := range s.shards {
+		sh := &s.shards[i]
+		sh.mu.Lock()
+		for k, e := range sh.m {
+			if e.expireAt > 0 && e.expireAt <= now {
+				delete(sh.m, k)
+			}
+		}
+		sh.mu.Unlock()
+	}
 }
 
 func (s *Store[K, V]) getShard(key K) *shard[K, V] {
