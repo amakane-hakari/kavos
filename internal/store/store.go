@@ -22,6 +22,16 @@ type Config struct {
 	CleanupInterval time.Duration // 0 で無効
 }
 
+type Evictor[K comparable, V any] interface {
+	// keyをセットした（existed: 既存だったか）後に呼ぶ。
+	// 返却 victims は Evictor 内部状態から既に除外済みで、Store 側が map から削除する。
+	OnSet(key K, value V, existed bool) (victims []K)
+	// Get 成功/失敗で呼ぶ（hit=true ならヒット）
+	OnGet(key K, hit bool)
+	// 明示削除/TTL 遅延削除時（eviction 起因以外）
+	OnDelete(key K)
+}
+
 type Option func(*Config)
 
 func WithShards(n int) Option {
@@ -39,6 +49,8 @@ type Store[K comparable, V any] struct {
 	cleanupInterval time.Duration // 0 で無効
 	stopCh          chan struct{}
 	wg              sync.WaitGroup
+
+	evictor Evictor[K, V]
 }
 
 func New[K comparable, V any](opts ...Option) *Store[K, V] {
@@ -71,6 +83,11 @@ func New[K comparable, V any](opts ...Option) *Store[K, V] {
 	return s
 }
 
+func (s *Store[K, V]) WithEvictor(ev Evictor[K, V]) *Store[K, V] {
+	s.evictor = ev
+	return s
+}
+
 func (s *Store[K, V]) Set(key K, value V) {
 	s.SetWithTTL(key, value, 0)
 }
@@ -82,8 +99,16 @@ func (s *Store[K, V]) SetWithTTL(key K, value V, ttl time.Duration) {
 	}
 	sh := s.getShard(key)
 	sh.mu.Lock()
+	_, existed := sh.m[key]
 	sh.m[key] = entry[V]{val: value, expireAt: exp}
 	sh.mu.Unlock()
+
+	if s.evictor != nil {
+		victims := s.evictor.OnSet(key, value, existed)
+		for _, vk := range victims {
+			s.deleteInternal(vk, true)
+		}
+	}
 }
 
 func (s *Store[K, V]) Get(key K) (V, bool) {
@@ -92,6 +117,9 @@ func (s *Store[K, V]) Get(key K) (V, bool) {
 	e, exists := sh.m[key]
 	sh.mu.RUnlock()
 	if !exists {
+		if s.evictor != nil {
+			s.evictor.OnGet(key, false)
+		}
 		var zero V
 		return zero, false
 	}
@@ -104,17 +132,33 @@ func (s *Store[K, V]) Get(key K) (V, bool) {
 			delete(sh.m, key)
 		}
 		sh.mu.Unlock()
+		if s.evictor != nil {
+			s.evictor.OnDelete(key)
+		}
 		var zero V
 		return zero, false
+	}
+	if s.evictor != nil {
+		s.evictor.OnGet(key, true)
 	}
 	return e.val, true
 }
 
 func (s *Store[K, V]) Delete(key K) {
+	s.deleteInternal(key, false)
+}
+
+func (s *Store[K, V]) deleteInternal(key K, fromEviction bool) {
 	sh := s.getShard(key)
 	sh.mu.Lock()
-	delete(sh.m, key)
+	_, existed := sh.m[key]
+	if existed {
+		delete(sh.m, key)
+	}
 	sh.mu.Unlock()
+	if existed && s.evictor != nil && !fromEviction {
+		s.evictor.OnDelete(key)
+	}
 }
 
 func (s *Store[K, V]) Len() int {
@@ -159,13 +203,20 @@ func (s *Store[K, V]) scanExpired() {
 	now := time.Now().UnixNano()
 	for i := range s.shards {
 		sh := &s.shards[i]
+		var expiredKeys []K
 		sh.mu.Lock()
 		for k, e := range sh.m {
 			if e.expireAt > 0 && e.expireAt <= now {
 				delete(sh.m, k)
+				expiredKeys = append(expiredKeys, k)
 			}
 		}
 		sh.mu.Unlock()
+		if s.evictor != nil {
+			for _, k := range expiredKeys {
+				s.evictor.OnDelete(k)
+			}
+		}
 	}
 }
 
