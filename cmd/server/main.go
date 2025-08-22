@@ -10,24 +10,31 @@ import (
 	"time"
 
 	apphttp "github.com/amakane-hakari/kavos/internal/api/http"
+	ilog "github.com/amakane-hakari/kavos/internal/log"
 	"github.com/amakane-hakari/kavos/internal/store"
 )
 
 func main() {
 	addr := getEnv("KAVOS_HTTP_ADDR", ":8080")
 
-	st := store.New[string, string]()
+	logger := ilog.New()
 
-	router := apphttp.NewRouter(st)
+	st := store.New[string, string](
+		store.WithShards(16),
+		store.WithCleanupInterval(1*time.Second),
+		store.WithLogger(logger),
+	).WithEvictor(store.NewLRUEvictor[string, string](10000))
+
+	router := apphttp.NewRouter(st, logger)
 
 	srv := &http.Server{
-		Addr:    addr,
-		Handler: router,
+		Addr:              addr,
+		Handler:           router,
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
 	log.Printf("starting server on %s", addr)
-	
+
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
@@ -39,10 +46,10 @@ func main() {
 	}()
 
 	select {
-		case <-ctx.Done():
-			log.Println("shutdown signal received")
-		case err := <-errCh:
-			log.Printf("server error: %v", err)
+	case <-ctx.Done():
+		log.Println("shutdown signal received")
+	case err := <-errCh:
+		log.Printf("server error: %v", err)
 	}
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

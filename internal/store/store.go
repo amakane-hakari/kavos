@@ -20,6 +20,13 @@ type shard[K comparable, V any] struct {
 type Config struct {
 	Shards          int           // 2 の冪推奨。0/未指定なら 16
 	CleanupInterval time.Duration // 0 で無効
+	Logger          logLike
+}
+
+type logLike interface {
+	Debug(msg string, args ...any)
+	Info(msg string, args ...any)
+	Error(msg string, args ...any)
 }
 
 type Evictor[K comparable, V any] interface {
@@ -33,6 +40,10 @@ type Evictor[K comparable, V any] interface {
 }
 
 type Option func(*Config)
+
+func WithLogger(l logLike) Option {
+	return func(c *Config) { c.Logger = l }
+}
 
 func WithShards(n int) Option {
 	return func(c *Config) { c.Shards = n }
@@ -65,10 +76,11 @@ func New[K comparable, V any](opts ...Option) *Store[K, V] {
 	cfg.Shards = nextPowerOfTwo(cfg.Shards)
 
 	s := &Store[K, V]{
-		cfg:       cfg,
+		cfg:             cfg,
 		shards:          make([]shard[K, V], cfg.Shards),
 		shardMask:       uint32(cfg.Shards - 1),
 		cleanupInterval: cfg.CleanupInterval,
+		evictor:         nil,
 	}
 	for i := range s.shards {
 		s.shards[i].m = make(map[K]entry[V])
@@ -103,10 +115,21 @@ func (s *Store[K, V]) SetWithTTL(key K, value V, ttl time.Duration) {
 	sh.m[key] = entry[V]{val: value, expireAt: exp}
 	sh.mu.Unlock()
 
+	if s.cfg.Logger != nil {
+		if existed {
+			s.cfg.Logger.Debug("store.update", "key", key)
+		} else {
+			s.cfg.Logger.Debug("store.set", "key", key, "ttl", ttl.String())
+		}
+	}
+
 	if s.evictor != nil {
 		victims := s.evictor.OnSet(key, value, existed)
 		for _, vk := range victims {
 			s.deleteInternal(vk, true)
+		}
+		if s.cfg.Logger != nil && len(victims) > 0 {
+			s.cfg.Logger.Info("store.evict", "count", len(victims), "victims", victims)
 		}
 	}
 }
@@ -210,6 +233,9 @@ func (s *Store[K, V]) scanExpired() {
 				delete(sh.m, k)
 				expiredKeys = append(expiredKeys, k)
 			}
+		}
+		if s.cfg.Logger != nil && len(expiredKeys) > 0 {
+			s.cfg.Logger.Info("store.ttl.cleanup", "shard", i, "removed", len(expiredKeys))
 		}
 		sh.mu.Unlock()
 		if s.evictor != nil {
