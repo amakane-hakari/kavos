@@ -9,12 +9,13 @@ import (
 	ilog "github.com/amakane-hakari/kavos/internal/log"
 )
 
+// NewRouter は KVSのHTTPルーターを作成します。
 func NewRouter(st *store.Store[string, string], logger ilog.Logger) http.Handler {
 	r := chi.NewRouter()
 	r.Use(requestIDMiddleware, recoverMiddleware)
 	r.Use(AccessLog(logger))
 
-	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
+	r.Get("/health", func(w http.ResponseWriter, _ *http.Request) {
 		writeSuccess(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
 

@@ -11,6 +11,7 @@ type ctxKey int
 
 const requestIDKey ctxKey = 1
 
+// RequestIDFromContext はコンテキストからリクエストIDを取得します。
 func RequestIDFromContext(ctx context.Context) string {
 	if v, ok := ctx.Value(requestIDKey).(string); ok {
 		return v
