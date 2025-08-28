@@ -1,3 +1,4 @@
+// Package main は KVSのメインエントリポイントです。
 package main
 
 import (

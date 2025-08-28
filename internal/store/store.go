@@ -17,6 +17,7 @@ type shard[K comparable, V any] struct {
 	m  map[K]entry[V]
 }
 
+// Config はストアの設定を表します。
 type Config struct {
 	Shards          int           // 2 の冪推奨。0/未指定なら 16
 	CleanupInterval time.Duration // 0 で無効
@@ -29,6 +30,7 @@ type logLike interface {
 	Error(msg string, args ...any)
 }
 
+// Evictor はストアのエビクタインターフェースを表します。
 type Evictor[K comparable, V any] interface {
 	// keyをセットした（existed: 既存だったか）後に呼ぶ。
 	// 返却 victims は Evictor 内部状態から既に除外済みで、Store 側が map から削除する。
@@ -39,20 +41,25 @@ type Evictor[K comparable, V any] interface {
 	OnDelete(key K)
 }
 
+// Option はストアのオプションを設定する関数です。
 type Option func(*Config)
 
+// WithLogger はストアのロガーを設定するオプションです。
 func WithLogger(l logLike) Option {
 	return func(c *Config) { c.Logger = l }
 }
 
+// WithShards はストアのシャード数を設定するオプションです。
 func WithShards(n int) Option {
 	return func(c *Config) { c.Shards = n }
 }
 
+// WithCleanupInterval はストアのクリーンアップ間隔を設定するオプションです。
 func WithCleanupInterval(d time.Duration) Option {
 	return func(c *Config) { c.CleanupInterval = d }
 }
 
+// Store は KVS のストアを表します。
 type Store[K comparable, V any] struct {
 	cfg             Config
 	shards          []shard[K, V]
@@ -64,6 +71,7 @@ type Store[K comparable, V any] struct {
 	evictor Evictor[K, V]
 }
 
+// New は新しい Store を作成します。
 func New[K comparable, V any](opts ...Option) *Store[K, V] {
 	cfg := Config{Shards: 16}
 	for _, o := range opts {
@@ -95,15 +103,18 @@ func New[K comparable, V any](opts ...Option) *Store[K, V] {
 	return s
 }
 
+// WithEvictor はストアのエビクタを設定するメソッドです。
 func (s *Store[K, V]) WithEvictor(ev Evictor[K, V]) *Store[K, V] {
 	s.evictor = ev
 	return s
 }
 
+// Set はキーと値をストアにセットします。
 func (s *Store[K, V]) Set(key K, value V) {
 	s.SetWithTTL(key, value, 0)
 }
 
+// SetWithTTL はキーと値をストアにセットします。
 func (s *Store[K, V]) SetWithTTL(key K, value V, ttl time.Duration) {
 	var exp int64
 	if ttl > 0 {
@@ -134,6 +145,7 @@ func (s *Store[K, V]) SetWithTTL(key K, value V, ttl time.Duration) {
 	}
 }
 
+// Get はキーに対応する値を取得します。
 func (s *Store[K, V]) Get(key K) (V, bool) {
 	sh := s.getShard(key)
 	sh.mu.RLock()
@@ -167,6 +179,7 @@ func (s *Store[K, V]) Get(key K) (V, bool) {
 	return e.val, true
 }
 
+// Delete はキーに対応する値を削除します。
 func (s *Store[K, V]) Delete(key K) {
 	s.deleteInternal(key, false)
 }
@@ -184,6 +197,7 @@ func (s *Store[K, V]) deleteInternal(key K, fromEviction bool) {
 	}
 }
 
+// Len はストア内のアイテム数を返します。
 func (s *Store[K, V]) Len() int {
 	now := time.Now().UnixNano()
 	total := 0
@@ -200,6 +214,7 @@ func (s *Store[K, V]) Len() int {
 	return total
 }
 
+// Close はストアをクローズします。
 func (s *Store[K, V]) Close() {
 	if s.stopCh == nil {
 		return
@@ -272,7 +287,7 @@ func (s *Store[K, V]) hashKey(key K) uint32 {
 		return uint32(k) ^ uint32(k>>32)
 	default:
 		h := fnv.New32a()
-		_, _ = h.Write([]byte(fmt.Sprintf("%v", k)))
+		_, _ = fmt.Fprintf(h, "%v", k)
 		return h.Sum32()
 	}
 }

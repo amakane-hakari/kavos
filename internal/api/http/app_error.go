@@ -6,6 +6,7 @@ import (
 	"net/http"
 )
 
+// AppError はアプリケーション固有のエラーを表します。
 type AppError struct {
 	Status  int         `json:"status"`
 	Code    string      `json:"code"`
@@ -15,6 +16,7 @@ type AppError struct {
 
 func (e *AppError) Error() string { return e.Code + ": " + e.Message }
 
+// NewAppError は新しい AppError を作成します。
 func NewAppError(status int, code, message string, meta interface{}) *AppError {
 	return &AppError{
 		Status:  status,
@@ -24,10 +26,15 @@ func NewAppError(status int, code, message string, meta interface{}) *AppError {
 	}
 }
 
+// BadRequest は 400 Bad Request エラーを表します。
 func BadRequest(msg string) *AppError {
 	return NewAppError(http.StatusBadRequest, "BAD_REQUEST", msg, nil)
 }
+
+// NotFound は 404 Not Found エラーを表します。
 func NotFound(msg string) *AppError { return NewAppError(http.StatusNotFound, "NOT_FOUND", msg, nil) }
+
+// Internal は 500 Internal Server Error エラーを表します。
 func Internal(msg string) *AppError {
 	return NewAppError(http.StatusInternalServerError, "INTERNAL_ERROR", msg, nil)
 }

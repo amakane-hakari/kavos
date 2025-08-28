@@ -17,6 +17,7 @@ type lruItem[K comparable] struct {
 	key K
 }
 
+// NewLRUEvictor は新しい LRUEvictor を作成します。
 func NewLRUEvictor[K comparable, V any](capacity int) *LRUEvictor[K, V] {
 	if capacity <= 0 {
 		capacity = 1 // 最低でも1つは保持
@@ -28,6 +29,7 @@ func NewLRUEvictor[K comparable, V any](capacity int) *LRUEvictor[K, V] {
 	}
 }
 
+// OnSet はアイテムがセットされたときに呼び出されます。
 func (l *LRUEvictor[K, V]) OnSet(key K, _ V, existed bool) (victims []K) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -56,6 +58,7 @@ func (l *LRUEvictor[K, V]) OnSet(key K, _ V, existed bool) (victims []K) {
 	return victims
 }
 
+// OnGet はアイテムが取得されたときに呼び出されます。
 func (l *LRUEvictor[K, V]) OnGet(key K, hit bool) {
 	if !hit {
 		return
@@ -67,6 +70,7 @@ func (l *LRUEvictor[K, V]) OnGet(key K, hit bool) {
 	}
 }
 
+// OnDelete はアイテムが削除されたときに呼び出されます。
 func (l *LRUEvictor[K, V]) OnDelete(key K) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
