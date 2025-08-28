@@ -45,8 +45,8 @@ jobs:
           path: coverage.out
 
       # golangci-lint (有効にする場合はコメント解除)
-      # - name: Lint
-      #   uses: golangci/golangci-lint-action@v6
-      #   with:
-      #     version: latest
-      #     args: --timeout=3m
+      - name: Lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+          args: --timeout=3m
