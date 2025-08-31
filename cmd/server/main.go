@@ -13,6 +13,7 @@ import (
 	apphttp "github.com/amakane-hakari/kavos/internal/api/http"
 	ilog "github.com/amakane-hakari/kavos/internal/log"
 	"github.com/amakane-hakari/kavos/internal/store"
+	"github.com/amakane-hakari/kavos/internal/metrics"
 )
 
 func main() {
@@ -20,10 +21,12 @@ func main() {
 
 	logger := ilog.New()
 
+	mx := metrics.NewSimple()
 	st := store.New[string, string](
 		store.WithShards(16),
 		store.WithCleanupInterval(1*time.Second),
 		store.WithLogger(logger),
+		store.WithMetrics(mx),
 	).WithEvictor(store.NewLRUEvictor[string, string](10000))
 
 	router := apphttp.NewRouter(st, logger)

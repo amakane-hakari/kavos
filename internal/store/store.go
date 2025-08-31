@@ -5,6 +5,8 @@ import (
 	"hash/fnv"
 	"sync"
 	"time"
+
+	"github.com/amakane-hakari/kavos/internal/metrics"
 )
 
 type entry[V any] struct {
@@ -22,6 +24,7 @@ type Config struct {
 	Shards          int           // 2 の冪推奨。0/未指定なら 16
 	CleanupInterval time.Duration // 0 で無効
 	Logger          logLike
+	Metrics         metrics.Interface
 }
 
 type logLike interface {
@@ -49,6 +52,11 @@ func WithLogger(l logLike) Option {
 	return func(c *Config) { c.Logger = l }
 }
 
+// WithMetrics はストアのメトリクスを設定するオプションです。
+func WithMetrics(m metrics.Interface) Option {
+	return func(c *Config) { c.Metrics = m }
+}
+
 // WithShards はストアのシャード数を設定するオプションです。
 func WithShards(n int) Option {
 	return func(c *Config) { c.Shards = n }
@@ -63,7 +71,7 @@ func WithCleanupInterval(d time.Duration) Option {
 type Store[K comparable, V any] struct {
 	cfg             Config
 	shards          []shard[K, V]
-	shardMask       uint32 // Shards が 2^n の場合（hash & mask）で index
+	shardMask       uint32        // Shards が 2^n の場合（hash & mask）で index
 	cleanupInterval time.Duration // 0 で無効
 	stopCh          chan struct{}
 	wg              sync.WaitGroup
@@ -73,7 +81,7 @@ type Store[K comparable, V any] struct {
 
 // New は新しい Store を作成します。
 func New[K comparable, V any](opts ...Option) *Store[K, V] {
-	cfg := Config{Shards: 16}
+	cfg := Config{Shards: 16, Metrics: &metrics.Noop{}}
 	for _, o := range opts {
 		o(&cfg)
 	}
@@ -126,6 +134,12 @@ func (s *Store[K, V]) SetWithTTL(key K, value V, ttl time.Duration) {
 	sh.m[key] = entry[V]{val: value, expireAt: exp}
 	sh.mu.Unlock()
 
+	if existed {
+		s.cfg.Metrics.IncSetUpdate()
+	} else {
+		s.cfg.Metrics.IncSetNew()
+	}
+
 	if s.cfg.Logger != nil {
 		if existed {
 			s.cfg.Logger.Debug("store.update", "key", key)
@@ -139,8 +153,11 @@ func (s *Store[K, V]) SetWithTTL(key K, value V, ttl time.Duration) {
 		for _, vk := range victims {
 			s.deleteInternal(vk, true)
 		}
-		if s.cfg.Logger != nil && len(victims) > 0 {
-			s.cfg.Logger.Info("store.evict", "count", len(victims), "victims", victims)
+		if len(victims) > 0 {
+			s.cfg.Metrics.AddEvicted(len(victims))
+			if s.cfg.Logger != nil {
+				s.cfg.Logger.Info("store.evict", "count", len(victims), "victims", victims)
+			}
 		}
 	}
 }
@@ -152,6 +169,7 @@ func (s *Store[K, V]) Get(key K) (V, bool) {
 	e, exists := sh.m[key]
 	sh.mu.RUnlock()
 	if !exists {
+		s.cfg.Metrics.IncGetMiss()
 		if s.evictor != nil {
 			s.evictor.OnGet(key, false)
 		}
@@ -170,9 +188,15 @@ func (s *Store[K, V]) Get(key K) (V, bool) {
 		if s.evictor != nil {
 			s.evictor.OnDelete(key)
 		}
+		s.cfg.Metrics.IncGetMiss()
+		s.cfg.Metrics.AddTTLExpired(1)
+		if s.cfg.Logger != nil {
+			s.cfg.Logger.Debug("store.ttl.expired", "key", key)
+		}
 		var zero V
 		return zero, false
 	}
+	s.cfg.Metrics.IncGetHit()
 	if s.evictor != nil {
 		s.evictor.OnGet(key, true)
 	}
@@ -239,6 +263,7 @@ func (s *Store[K, V]) cleanupLoop() {
 
 func (s *Store[K, V]) scanExpired() {
 	now := time.Now().UnixNano()
+	totalExpired := 0
 	for i := range s.shards {
 		sh := &s.shards[i]
 		var expiredKeys []K
@@ -253,11 +278,20 @@ func (s *Store[K, V]) scanExpired() {
 			s.cfg.Logger.Info("store.ttl.cleanup", "shard", i, "removed", len(expiredKeys))
 		}
 		sh.mu.Unlock()
-		if s.evictor != nil {
-			for _, k := range expiredKeys {
-				s.evictor.OnDelete(k)
+		if len(expiredKeys) > 0 {
+			totalExpired += len(expiredKeys)
+			if s.evictor != nil {
+				for _, k := range expiredKeys {
+					s.evictor.OnDelete(k)
+				}
+			}
+			if s.cfg.Logger != nil {
+				s.cfg.Logger.Info("store.ttl.cleanup", "shard", i, "removed", len(expiredKeys))
 			}
 		}
+	}
+	if totalExpired > 0 {
+		s.cfg.Metrics.AddTTLExpired(totalExpired)
 	}
 }
 
