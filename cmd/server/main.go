@@ -21,7 +21,12 @@ func main() {
 
 	logger := ilog.New()
 
-	mx := metrics.NewSimple()
+	var mx metrics.Interface
+	if os.Getenv("METRICS") == "prometheus" {
+		mx = metrics.NewProm("kavos")
+	} else {
+		mx = metrics.NewSimple()
+	}
 	st := store.New[string, string](
 		store.WithShards(16),
 		store.WithCleanupInterval(1*time.Second),
