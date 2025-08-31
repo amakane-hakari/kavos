@@ -30,7 +30,9 @@ func New() *Slog {
 
 // Debug はデバッグレベルのログを出力します。
 func (s *Slog) Debug(msg string, args ...any) { s.l.Debug(msg, args...) }
+
 // Info は情報レベルのログを出力します。
-func (s *Slog) Info(msg string, args ...any)  { s.l.Info(msg, args...) }
+func (s *Slog) Info(msg string, args ...any) { s.l.Info(msg, args...) }
+
 // Error はエラーレベルのログを出力します。
 func (s *Slog) Error(msg string, args ...any) { s.l.Error(msg, args...) }

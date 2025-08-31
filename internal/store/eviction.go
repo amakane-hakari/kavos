@@ -9,7 +9,7 @@ import (
 type LRUEvictor[K comparable, V any] struct {
 	cap int
 	mu  sync.Mutex
-	ll  *list.List // Front = 最も古い（victim）, Back = 最近使用
+	ll  *list.List          // Front = 最も古い（victim）, Back = 最近使用
 	idx map[K]*list.Element // key -> *Element
 }
 

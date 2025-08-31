@@ -12,8 +12,8 @@ import (
 
 	apphttp "github.com/amakane-hakari/kavos/internal/api/http"
 	ilog "github.com/amakane-hakari/kavos/internal/log"
-	"github.com/amakane-hakari/kavos/internal/store"
 	"github.com/amakane-hakari/kavos/internal/metrics"
+	"github.com/amakane-hakari/kavos/internal/store"
 )
 
 func main() {
