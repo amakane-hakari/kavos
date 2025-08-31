@@ -10,6 +10,10 @@ linters:
     - unused
     - errcheck
     - revive
+formatters:
+  enable:
+    - gofmt
+    - goimports
 
 issues:
   max-issues-per-linter: 0
