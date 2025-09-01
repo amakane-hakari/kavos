@@ -12,12 +12,20 @@ type Prom struct {
 	getMiss    prometheus.Counter
 	evicted    prometheus.Counter
 	ttlExpired prometheus.Counter
+	lruSize    prometheus.Gauge
 }
 
 // NewProm は Prometheus を使ったメトリクス実装を初期化します。
 func NewProm(namespace string) *Prom {
 	makeC := func(name, help string) prometheus.Counter {
 		return prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: namespace,
+			Name:      name,
+			Help:      help,
+		})
+	}
+	makeG := func(name, help string) prometheus.Gauge {
+		return prometheus.NewGauge(prometheus.GaugeOpts{
 			Namespace: namespace,
 			Name:      name,
 			Help:      help,
@@ -31,11 +39,12 @@ func NewProm(namespace string) *Prom {
 		getMiss:    makeC("get_miss_total", "Number of cache misses"),
 		evicted:    makeC("evicted_total", "Number of evicted items"),
 		ttlExpired: makeC("ttl_expired_total", "Number of TTL expired items"),
+		lruSize:    makeG("lru_current_size", "Current number of keys tracked by LRU"),
 	}
 
 	// Register (重複登録は無視したいので MustRegister で panic するなら再利用側で 1 回だけ呼ぶ設計)
 	prometheus.MustRegister(
-		p.setNew, p.setUpdate, p.getHit, p.getMiss, p.evicted, p.ttlExpired,
+		p.setNew, p.setUpdate, p.getHit, p.getMiss, p.evicted, p.ttlExpired, p.lruSize,
 	)
 	return p
 }
@@ -63,5 +72,12 @@ func (p *Prom) AddEvicted(n int) {
 func (p *Prom) AddTTLExpired(n int) {
 	if n > 0 {
 		p.ttlExpired.Add(float64(n))
+	}
+}
+
+// SetLRUSize は LRU サイズを設定します。
+func (p *Prom) SetLRUSize(n int) {
+	if n >= 0 {
+		p.lruSize.Set(float64(n))
 	}
 }

@@ -12,6 +12,7 @@ type Interface interface {
 	IncGetMiss()
 	AddEvicted(n int)
 	AddTTLExpired(n int)
+	SetLRUSize(n int)
 }
 
 // Noop は何もしないメトリクス実装
@@ -35,6 +36,9 @@ func (Noop) AddEvicted(_ int) {}
 // AddTTLExpired は何もしないメトリクス実装
 func (Noop) AddTTLExpired(_ int) {}
 
+// SetLRUSize は何もしないメトリクス実装
+func (Noop) SetLRUSize(_ int) {}
+
 // Simple はシンプルなメトリクス実装です。
 type Simple struct {
 	SetNew     atomic.Uint64
@@ -43,6 +47,7 @@ type Simple struct {
 	GetMiss    atomic.Uint64
 	Evicted    atomic.Uint64
 	TTLExpired atomic.Uint64
+	LRUSize    atomic.Uint64
 }
 
 // NewSimple は新しい Simple メトリクスを作成します。
@@ -71,5 +76,12 @@ func (m *Simple) AddEvicted(n int) {
 func (m *Simple) AddTTLExpired(n int) {
 	if n > 0 {
 		m.TTLExpired.Add(uint64(n))
+	}
+}
+
+// SetLRUSize は LRU サイズを設定します。
+func (m *Simple) SetLRUSize(n int) {
+	if n >= 0 {
+		m.LRUSize.Store(uint64(n))
 	}
 }

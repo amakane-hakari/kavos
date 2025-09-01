@@ -43,3 +43,25 @@ func TestStore_MetricsBasic(t *testing.T) {
 		t.Fatalf("TTLExpired want 1 got %d", simple.TTLExpired.Load())
 	}
 }
+
+func TestStore_LRUSizeMetric(t *testing.T) {
+	mx := metrics.NewSimple()
+	st := New[string, string](WithMetrics(mx)).WithEvictor(NewLRUEvictor[string, string](2))
+
+	st.Set("a", "1")
+	if mx.LRUSize.Load() != 1 {
+		t.Fatalf("LRUSize want 1 got %d", mx.LRUSize.Load())
+	}
+	st.Set("b", "2")
+	if mx.LRUSize.Load() != 2 {
+		t.Fatalf("LRUSize want 2 got %d", mx.LRUSize.Load())
+	}
+	st.Set("c", "3")
+	if mx.LRUSize.Load() != 2 {
+		t.Fatalf("LRUSize want 2 got %d", mx.LRUSize.Load())
+	}
+	st.Delete("b")
+	if mx.LRUSize.Load() != 1 {
+		t.Fatalf("LRUSize want 1 got %d", mx.LRUSize.Load())
+	}
+}

@@ -159,6 +159,9 @@ func (s *Store[K, V]) SetWithTTL(key K, value V, ttl time.Duration) {
 				s.cfg.Logger.Info("store.evict", "count", len(victims), "victims", victims)
 			}
 		}
+		if sp, ok := s.evictor.(interface{ Size() int }); ok {
+			s.cfg.Metrics.SetLRUSize(sp.Size())
+		}
 	}
 }
 
@@ -187,6 +190,9 @@ func (s *Store[K, V]) Get(key K) (V, bool) {
 		sh.mu.Unlock()
 		if s.evictor != nil {
 			s.evictor.OnDelete(key)
+			if sp, ok := s.evictor.(interface{ Size() int }); ok {
+				s.cfg.Metrics.SetLRUSize(sp.Size())
+			}
 		}
 		s.cfg.Metrics.IncGetMiss()
 		s.cfg.Metrics.AddTTLExpired(1)
@@ -218,6 +224,9 @@ func (s *Store[K, V]) deleteInternal(key K, fromEviction bool) {
 	sh.mu.Unlock()
 	if existed && s.evictor != nil && !fromEviction {
 		s.evictor.OnDelete(key)
+		if sp, ok := s.evictor.(interface{ Size() int }); ok {
+			s.cfg.Metrics.SetLRUSize(sp.Size())
+		}
 	}
 }
 
@@ -284,6 +293,9 @@ func (s *Store[K, V]) scanExpired() {
 				for _, k := range expiredKeys {
 					s.evictor.OnDelete(k)
 				}
+			}
+			if sp, ok := s.evictor.(interface{ Size() int }); ok {
+				s.cfg.Metrics.SetLRUSize(sp.Size())
 			}
 			if s.cfg.Logger != nil {
 				s.cfg.Logger.Info("store.ttl.cleanup", "shard", i, "removed", len(expiredKeys))

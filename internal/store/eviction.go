@@ -29,6 +29,13 @@ func NewLRUEvictor[K comparable, V any](capacity int) *LRUEvictor[K, V] {
 	}
 }
 
+// Size は現在のサイズを返します。
+func (l *LRUEvictor[K, V]) Size() int {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.ll.Len()
+}
+
 // OnSet はアイテムがセットされたときに呼び出されます。
 func (l *LRUEvictor[K, V]) OnSet(key K, _ V, existed bool) (victims []K) {
 	l.mu.Lock()
