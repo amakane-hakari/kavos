@@ -41,7 +41,9 @@ func AccessLog(l ilog.Logger) func(http.Handler) http.Handler {
 			next.ServeHTTP(lrw, r)
 
 			dur := time.Since(start)
+			reqID := RequestIDFromContext(r.Context())
 			l.Info("access.log",
+				"req_id", reqID,
 				"method", r.Method,
 				"path", r.URL.Path,
 				"status", lrw.status,
