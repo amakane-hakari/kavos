@@ -97,13 +97,13 @@ func New[K comparable, V any](opts ...Option) *Store[K, V] {
 		shardMask:       uint32(cfg.Shards - 1),
 		cleanupInterval: cfg.CleanupInterval,
 		evictor:         nil,
+		stopCh:          make(chan struct{}),
 	}
 	for i := range s.shards {
 		s.shards[i].m = make(map[K]entry[V])
 	}
 
 	if s.cleanupInterval > 0 {
-		s.stopCh = make(chan struct{})
 		s.wg.Add(1)
 		go s.cleanupLoop()
 	}

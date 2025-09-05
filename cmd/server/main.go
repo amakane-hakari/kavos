@@ -42,9 +42,9 @@ func main() {
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
-	log.Printf("starting server on %s", addr)
+	log.Printf("server.start addr=%s pid=%d", addr, os.Getpid())
 
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	sigCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
 	errCh := make(chan error, 1)
@@ -55,20 +55,43 @@ func main() {
 	}()
 
 	select {
-	case <-ctx.Done():
-		log.Println("shutdown signal received")
+	case <-sigCtx.Done():
+		log.Printf("server.stop signal received: %v", sigCtx.Err())
 	case err := <-errCh:
-		log.Printf("server error: %v", err)
+		log.Printf("server.listen.error err=%v", err)
 	}
 
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	// Draining 開始(ヘルスチェックを503にする)
+	apphttp.SetDraining(true)
+
+	// シャットダウン待機時間
+	shutdownTimeout := 10 * time.Second
+	if v := os.Getenv("SHUTDOWN_TIMEOUT"); v != "" {
+		if d, err := time.ParseDuration(v); err == nil && d > 0 {
+			shutdownTimeout = d
+		}
+	}
+	log.Printf("server.shutdown.wait timeout=%s", shutdownTimeout)
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer cancel()
 
 	if err := srv.Shutdown(shutdownCtx); err != nil {
-		log.Printf("server shutdown error: %v", err)
-	} else {
-		log.Println("server stopped")
+		log.Printf("server.shutdown.warn err=%v (force close)", err)
+		_ = srv.Close()
 	}
+
+	st.Close()
+
+	remaining := "n/a"
+	if dl, ok := shutdownCtx.Deadline(); ok {
+		if r := time.Until(dl); r > 0 {
+			remaining = r.String()
+		} else {
+			remaining = "0s"
+		}
+	}
+	log.Printf("server.shutdown.done graceful=%v remaining=%s", shutdownCtx.Err() == nil, remaining)
 }
 
 func getEnv(k, def string) string {

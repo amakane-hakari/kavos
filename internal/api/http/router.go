@@ -20,6 +20,8 @@ func NewRouter(st *store.Store[string, string], logger ilog.Logger) http.Handler
 		writeSuccess(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
 
+	r.Get("/healthz", healthHandler)
+
 	r.Method(http.MethodGet, "/metrics", promhttp.Handler())
 
 	kv := &kvHandler{st: st}
