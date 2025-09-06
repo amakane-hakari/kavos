@@ -41,7 +41,7 @@ const (
 func (e *AppError) Error() string { return e.Code + ": " + e.Message }
 
 // NewAppError は新しい AppError を作成します。
-func NewAppError(status int, code, message string, meta interface{}) *AppError {
+func NewAppError(status int, code, message string, meta any) *AppError {
 	return &AppError{
 		Status:  status,
 		Code:    code,
@@ -98,13 +98,13 @@ type errorEnvelope struct {
 	Err *AppError `json:"error"`
 }
 
-func writeJSON(w http.ResponseWriter, status int, v interface{}) {
+func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(v)
 }
 
-func writeSuccess(w http.ResponseWriter, status int, data interface{}) {
+func writeSuccess(w http.ResponseWriter, status int, data any) {
 	writeJSON(w, status, successEnvelope{Data: data})
 }
 
