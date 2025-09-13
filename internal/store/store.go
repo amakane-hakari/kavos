@@ -9,22 +9,31 @@ import (
 	"github.com/amakane-hakari/kavos/internal/metrics"
 )
 
+const cacheLineSize = 64
+
 type entry[V any] struct {
 	val      V
 	expireAt int64 // 0 = no expiry (UnixNano)
 }
 
-type shard[K comparable, V any] struct {
+type shardCompact[K comparable, V any] struct {
 	mu sync.RWMutex
 	m  map[K]entry[V]
 }
 
+type shardPadding[K comparable, V any] struct {
+	mu sync.RWMutex
+	m  map[K]entry[V]
+	_  [cacheLineSize]byte // cache line padding
+}
+
 // Config はストアの設定を表します。
 type Config struct {
-	Shards          int           // 2 の冪推奨。0/未指定なら 16
-	CleanupInterval time.Duration // 0 で無効
-	Logger          logLike
-	Metrics         metrics.Interface
+	Shards             int           // 2 の冪推奨。0/未指定なら 16
+	CleanupInterval    time.Duration // 0 で無効
+	Logger             logLike
+	Metrics            metrics.Interface
+	EnableShardPadding bool // シャードのパディングを有効にする
 }
 
 type logLike interface {
@@ -67,16 +76,25 @@ func WithCleanupInterval(d time.Duration) Option {
 	return func(c *Config) { c.CleanupInterval = d }
 }
 
+// WithShardPadding はストアのシャードパディングを有効にするオプションです。
+func WithShardPadding() Option {
+	return func(c *Config) { c.EnableShardPadding = true }
+}
+
 // Store は KVS のストアを表します。
 type Store[K comparable, V any] struct {
 	cfg             Config
-	shards          []shard[K, V]
 	shardMask       uint32        // Shards が 2^n の場合（hash & mask）で index
 	cleanupInterval time.Duration // 0 で無効
 	stopCh          chan struct{}
 	wg              sync.WaitGroup
+	evictor         Evictor[K, V]
 
-	evictor Evictor[K, V]
+	closeOnce sync.Once // Close 多重呼び出し防止
+
+	// どちらか一方だけ使用
+	shardsCompact []shardCompact[K, V]
+	shardsPadded  []shardPadding[K, V]
 }
 
 // New は新しい Store を作成します。
@@ -93,14 +111,21 @@ func New[K comparable, V any](opts ...Option) *Store[K, V] {
 
 	s := &Store[K, V]{
 		cfg:             cfg,
-		shards:          make([]shard[K, V], cfg.Shards),
 		shardMask:       uint32(cfg.Shards - 1),
 		cleanupInterval: cfg.CleanupInterval,
 		evictor:         nil,
 		stopCh:          make(chan struct{}),
 	}
-	for i := range s.shards {
-		s.shards[i].m = make(map[K]entry[V])
+	if cfg.EnableShardPadding {
+		s.shardsPadded = make([]shardPadding[K, V], cfg.Shards)
+		for i := range s.shardsPadded {
+			s.shardsPadded[i].m = make(map[K]entry[V])
+		}
+	} else {
+		s.shardsCompact = make([]shardCompact[K, V], cfg.Shards)
+		for i := range s.shardsCompact {
+			s.shardsCompact[i].m = make(map[K]entry[V])
+		}
 	}
 
 	if s.cleanupInterval > 0 {
@@ -128,11 +153,11 @@ func (s *Store[K, V]) SetWithTTL(key K, value V, ttl time.Duration) {
 	if ttl > 0 {
 		exp = time.Now().Add(ttl).UnixNano()
 	}
-	sh := s.getShard(key)
-	sh.mu.Lock()
-	_, existed := sh.m[key]
-	sh.m[key] = entry[V]{val: value, expireAt: exp}
-	sh.mu.Unlock()
+	mu, mp := s.getShard(key)
+	mu.Lock()
+	_, existed := mp[key]
+	mp[key] = entry[V]{val: value, expireAt: exp}
+	mu.Unlock()
 
 	if existed {
 		s.cfg.Metrics.IncSetUpdate()
@@ -167,10 +192,10 @@ func (s *Store[K, V]) SetWithTTL(key K, value V, ttl time.Duration) {
 
 // Get はキーに対応する値を取得します。
 func (s *Store[K, V]) Get(key K) (V, bool) {
-	sh := s.getShard(key)
-	sh.mu.RLock()
-	e, exists := sh.m[key]
-	sh.mu.RUnlock()
+	mu, mp := s.getShard(key)
+	mu.RLock()
+	e, exists := mp[key]
+	mu.RUnlock()
 	if !exists {
 		s.cfg.Metrics.IncGetMiss()
 		if s.evictor != nil {
@@ -181,13 +206,13 @@ func (s *Store[K, V]) Get(key K) (V, bool) {
 	}
 	if e.expireAt > 0 && e.expireAt <= time.Now().UnixNano() {
 		// 遅延削除
-		sh.mu.Lock()
+		mu.Lock()
 		// 期限内に他ゴルーチンが更新しているか再確認
-		cur, still := sh.m[key]
+		cur, still := mp[key]
 		if still && cur.expireAt == e.expireAt {
-			delete(sh.m, key)
+			delete(mp, key)
 		}
-		sh.mu.Unlock()
+		mu.Unlock()
 		if s.evictor != nil {
 			s.evictor.OnDelete(key)
 			if sp, ok := s.evictor.(interface{ Size() int }); ok {
@@ -215,13 +240,13 @@ func (s *Store[K, V]) Delete(key K) {
 }
 
 func (s *Store[K, V]) deleteInternal(key K, fromEviction bool) {
-	sh := s.getShard(key)
-	sh.mu.Lock()
-	_, existed := sh.m[key]
+	mu, mp := s.getShard(key)
+	mu.Lock()
+	_, existed := mp[key]
 	if existed {
-		delete(sh.m, key)
+		delete(mp, key)
 	}
-	sh.mu.Unlock()
+	mu.Unlock()
 	if existed && s.evictor != nil && !fromEviction {
 		s.evictor.OnDelete(key)
 		if sp, ok := s.evictor.(interface{ Size() int }); ok {
@@ -234,25 +259,39 @@ func (s *Store[K, V]) deleteInternal(key K, fromEviction bool) {
 func (s *Store[K, V]) Len() int {
 	now := time.Now().UnixNano()
 	total := 0
-	for i := range s.shards {
-		sh := &s.shards[i]
-		sh.mu.RLock()
-		for _, e := range sh.m {
-			if e.expireAt == 0 || e.expireAt > now {
-				total++
+	if s.cfg.EnableShardPadding {
+		for i := range s.shardsPadded {
+			sh := &s.shardsPadded[i]
+			sh.mu.RLock()
+			for _, e := range sh.m {
+				if e.expireAt == 0 || e.expireAt > now {
+					total++
+				}
 			}
+			sh.mu.RUnlock()
 		}
-		sh.mu.RUnlock()
+	} else {
+		for i := range s.shardsCompact {
+			sh := &s.shardsCompact[i]
+			sh.mu.RLock()
+			for _, e := range sh.m {
+				if e.expireAt == 0 || e.expireAt > now {
+					total++
+				}
+			}
+			sh.mu.RUnlock()
+		}
 	}
 	return total
 }
 
 // Close はストアをクローズします。
 func (s *Store[K, V]) Close() {
-	if s.stopCh == nil {
-		return
-	}
-	close(s.stopCh)
+	s.closeOnce.Do(func() {
+		if s.stopCh != nil {
+			close(s.stopCh)
+		}
+	})
 	s.wg.Wait()
 }
 
@@ -273,32 +312,61 @@ func (s *Store[K, V]) cleanupLoop() {
 func (s *Store[K, V]) scanExpired() {
 	now := time.Now().UnixNano()
 	totalExpired := 0
-	for i := range s.shards {
-		sh := &s.shards[i]
-		var expiredKeys []K
-		sh.mu.Lock()
-		for k, e := range sh.m {
-			if e.expireAt > 0 && e.expireAt <= now {
-				delete(sh.m, k)
-				expiredKeys = append(expiredKeys, k)
-			}
-		}
-		if s.cfg.Logger != nil && len(expiredKeys) > 0 {
-			s.cfg.Logger.Info("store.ttl.cleanup", "shard", i, "removed", len(expiredKeys))
-		}
-		sh.mu.Unlock()
-		if len(expiredKeys) > 0 {
-			totalExpired += len(expiredKeys)
-			if s.evictor != nil {
-				for _, k := range expiredKeys {
-					s.evictor.OnDelete(k)
+	if s.cfg.EnableShardPadding {
+		for i := range s.shardsPadded {
+			sh := &s.shardsPadded[i]
+			var expiredKeys []K
+			sh.mu.Lock()
+			for k, e := range sh.m {
+				if e.expireAt > 0 && e.expireAt <= now {
+					delete(sh.m, k)
+					expiredKeys = append(expiredKeys, k)
 				}
 			}
-			if sp, ok := s.evictor.(interface{ Size() int }); ok {
-				s.cfg.Metrics.SetLRUSize(sp.Size())
+			sh.mu.Unlock()
+			if len(expiredKeys) > 0 {
+				totalExpired += len(expiredKeys)
+				if s.evictor != nil {
+					for _, k := range expiredKeys {
+						s.evictor.OnDelete(k)
+					}
+				}
+				if sp, ok := s.evictor.(interface{ Size() int }); ok {
+					s.cfg.Metrics.SetLRUSize(sp.Size())
+				}
+				if s.cfg.Logger != nil {
+					s.cfg.Logger.Info("store.ttl.cleanup", "shard", i, "removed", len(expiredKeys))
+				}
 			}
-			if s.cfg.Logger != nil {
+		}
+	} else {
+		for i := range s.shardsCompact {
+			sh := &s.shardsCompact[i]
+			var expiredKeys []K
+			sh.mu.Lock()
+			for k, e := range sh.m {
+				if e.expireAt > 0 && e.expireAt <= now {
+					delete(sh.m, k)
+					expiredKeys = append(expiredKeys, k)
+				}
+			}
+			if s.cfg.Logger != nil && len(expiredKeys) > 0 {
 				s.cfg.Logger.Info("store.ttl.cleanup", "shard", i, "removed", len(expiredKeys))
+			}
+			sh.mu.Unlock()
+			if len(expiredKeys) > 0 {
+				totalExpired += len(expiredKeys)
+				if s.evictor != nil {
+					for _, k := range expiredKeys {
+						s.evictor.OnDelete(k)
+					}
+				}
+				if sp, ok := s.evictor.(interface{ Size() int }); ok {
+					s.cfg.Metrics.SetLRUSize(sp.Size())
+				}
+				if s.cfg.Logger != nil {
+					s.cfg.Logger.Info("store.ttl.cleanup", "shard", i, "removed", len(expiredKeys))
+				}
 			}
 		}
 	}
@@ -307,10 +375,15 @@ func (s *Store[K, V]) scanExpired() {
 	}
 }
 
-func (s *Store[K, V]) getShard(key K) *shard[K, V] {
+func (s *Store[K, V]) getShard(key K) (rw *sync.RWMutex, m map[K]entry[V]) {
 	h := s.hashKey(key)
 	idx := int(h & s.shardMask)
-	return &s.shards[idx]
+	if s.cfg.EnableShardPadding {
+		sh := &s.shardsPadded[idx]
+		return &sh.mu, sh.m
+	}
+	sh := &s.shardsCompact[idx]
+	return &sh.mu, sh.m
 }
 
 func (s *Store[K, V]) hashKey(key K) uint32 {
