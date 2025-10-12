@@ -1,0 +1,9 @@
+bin/
+out/
+vegeta_results.bin
+*.bin
+*.html
+*.json
+*.log
+.git/
+.DS_Store

@@ -1,0 +1,16 @@
+goos: linux
+goarch: amd64
+pkg: github.com/amakane-hakari/kavos/internal/store
+cpu: AMD Ryzen 5 7535U with Radeon Graphics         
+BenchmarkStore_MixedWorkload/shards=1,_readRatio=90,_withEvict=false,_warmKeys=50000,_parallel=true-12         	 3830960	       339.9 ns/op	   3448176 get_hits_total	    382784 sets_total	      18 B/op	       1 allocs/op
+BenchmarkStore_MixedWorkload/shards=16,_readRatio=90,_withEvict=false,_warmKeys=50000,_parallel=true-12        	17757357	        60.84 ns/op	  15981894 get_hits_total	   1775463 sets_total	      17 B/op	       1 allocs/op
+BenchmarkStore_MixedWorkload/shards=64,_readRatio=90,_withEvict=false,_warmKeys=50000,_parallel=true-12        	28301971	        37.23 ns/op	  25472696 get_hits_total	   2829275 sets_total	      17 B/op	       1 allocs/op
+BenchmarkStore_MixedWorkload/shards=256,_readRatio=90,_withEvict=false,_warmKeys=50000,_parallel=true-12       	37754384	        31.70 ns/op	  33980674 get_hits_total	   3773710 sets_total	      17 B/op	       1 allocs/op
+BenchmarkStore_MixedWorkload/shards=16,_readRatio=50,_withEvict=false,_warmKeys=50000,_parallel=true-12        	13877077	        92.97 ns/op	   6939560 get_hits_total	   6937517 sets_total	      24 B/op	       1 allocs/op
+BenchmarkStore_MixedWorkload/shards=16,_readRatio=10,_withEvict=false,_warmKeys=50000,_parallel=true-12        	12434790	        95.05 ns/op	   1246159 get_hits_total	  11188631 sets_total	      25 B/op	       1 allocs/op
+BenchmarkStore_MixedWorkload/shards=16,_readRatio=90,_withEvict=true,_warmKeys=50000,_parallel=true-12         	 3142684	       392.8 ns/op	   1622617 get_hits_total	    314043 sets_total	      21 B/op	       1 allocs/op
+BenchmarkStore_MixedWorkload/shards=16,_readRatio=50,_withEvict=true,_warmKeys=50000,_parallel=true-12         	 1472889	       783.7 ns/op	    394725 get_hits_total	    736203 sets_total	      42 B/op	       2 allocs/op
+BenchmarkStore_MixedWorkload/shards=16,_readRatio=10,_withEvict=true,_warmKeys=50000,_parallel=true-12         	 1455792	       940.6 ns/op	     76238 get_hits_total	   1309850 sets_total	      64 B/op	       3 allocs/op
+BenchmarkStore_MixedWorkload/shards=16,_readRatio=90,_withEvict=false,_warmKeys=50000,_parallel=false-12       	10972053	       118.1 ns/op	   9875246 get_hits_total	   1096807 sets_total	      17 B/op	       1 allocs/op
+PASS
+ok  	github.com/amakane-hakari/kavos/internal/store	16.402s
