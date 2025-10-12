@@ -1,0 +1,36 @@
+goos: linux
+goarch: amd64
+pkg: github.com/amakane-hakari/kavos/internal/store
+cpu: AMD Ryzen 5 7535U with Radeon Graphics         
+BenchmarkStore_MixedWorkload/shards=1,_readRatio=90,_withEvict=false,_warmKeys=50000,_parallel=true           	 9825675	       117.9 ns/op	   8843042 get_hits_total	    982633 sets_total	      18 B/op	       1 allocs/op
+BenchmarkStore_MixedWorkload/shards=1,_readRatio=90,_withEvict=false,_warmKeys=50000,_parallel=true-4         	 6960298	       161.3 ns/op	   6262932 get_hits_total	    697366 sets_total	      18 B/op	       1 allocs/op
+BenchmarkStore_MixedWorkload/shards=1,_readRatio=90,_withEvict=false,_warmKeys=50000,_parallel=true-8         	 5384961	       192.5 ns/op	   4845934 get_hits_total	    539027 sets_total	      17 B/op	       1 allocs/op
+BenchmarkStore_MixedWorkload/shards=16,_readRatio=90,_withEvict=false,_warmKeys=50000,_parallel=true          	 9882969	       116.4 ns/op	   8894770 get_hits_total	    988199 sets_total	      18 B/op	       1 allocs/op
+BenchmarkStore_MixedWorkload/shards=16,_readRatio=90,_withEvict=false,_warmKeys=50000,_parallel=true-4        	12268920	        98.44 ns/op	  11040748 get_hits_total	   1228172 sets_total	      17 B/op	       1 allocs/op
+BenchmarkStore_MixedWorkload/shards=16,_readRatio=90,_withEvict=false,_warmKeys=50000,_parallel=true-8        	17701538	        61.41 ns/op	  15931529 get_hits_total	   1770009 sets_total	      17 B/op	       1 allocs/op
+BenchmarkStore_MixedWorkload/shards=64,_readRatio=90,_withEvict=false,_warmKeys=50000,_parallel=true          	 9919854	       153.4 ns/op	   8928000 get_hits_total	    991854 sets_total	      18 B/op	       1 allocs/op
+BenchmarkStore_MixedWorkload/shards=64,_readRatio=90,_withEvict=false,_warmKeys=50000,_parallel=true-4        	15968734	        77.53 ns/op	  14372034 get_hits_total	   1596700 sets_total	      17 B/op	       1 allocs/op
+BenchmarkStore_MixedWorkload/shards=64,_readRatio=90,_withEvict=false,_warmKeys=50000,_parallel=true-8        	24834706	        45.36 ns/op	  22350550 get_hits_total	   2484156 sets_total	      18 B/op	       1 allocs/op
+BenchmarkStore_MixedWorkload/shards=256,_readRatio=90,_withEvict=false,_warmKeys=50000,_parallel=true         	 8150230	       143.4 ns/op	   7334913 get_hits_total	    815317 sets_total	      18 B/op	       1 allocs/op
+BenchmarkStore_MixedWorkload/shards=256,_readRatio=90,_withEvict=false,_warmKeys=50000,_parallel=true-4       	18449934	        56.65 ns/op	  16604616 get_hits_total	   1845318 sets_total	      17 B/op	       1 allocs/op
+BenchmarkStore_MixedWorkload/shards=256,_readRatio=90,_withEvict=false,_warmKeys=50000,_parallel=true-8       	30064872	        38.84 ns/op	  27058229 get_hits_total	   3006643 sets_total	      17 B/op	       1 allocs/op
+BenchmarkStore_MixedWorkload/shards=16,_readRatio=50,_withEvict=false,_warmKeys=50000,_parallel=true          	 6758942	       194.2 ns/op	   3380490 get_hits_total	   3378452 sets_total	      23 B/op	       1 allocs/op
+BenchmarkStore_MixedWorkload/shards=16,_readRatio=50,_withEvict=false,_warmKeys=50000,_parallel=true-4        	 7496292	       190.3 ns/op	   3747572 get_hits_total	   3748720 sets_total	      23 B/op	       1 allocs/op
+BenchmarkStore_MixedWorkload/shards=16,_readRatio=50,_withEvict=false,_warmKeys=50000,_parallel=true-8        	10758043	       106.9 ns/op	   5379402 get_hits_total	   5378641 sets_total	      24 B/op	       1 allocs/op
+BenchmarkStore_MixedWorkload/shards=16,_readRatio=10,_withEvict=false,_warmKeys=50000,_parallel=true          	 6173151	       232.6 ns/op	    616062 get_hits_total	   5557089 sets_total	      32 B/op	       1 allocs/op
+BenchmarkStore_MixedWorkload/shards=16,_readRatio=10,_withEvict=false,_warmKeys=50000,_parallel=true-4        	 7072030	       163.9 ns/op	    707609 get_hits_total	   6364421 sets_total	      31 B/op	       1 allocs/op
+BenchmarkStore_MixedWorkload/shards=16,_readRatio=10,_withEvict=false,_warmKeys=50000,_parallel=true-8        	10311199	       118.6 ns/op	   1032642 get_hits_total	   9278557 sets_total	      27 B/op	       1 allocs/op
+BenchmarkStore_MixedWorkload/shards=16,_readRatio=90,_withEvict=true,_warmKeys=50000,_parallel=true           	 4337119	       263.0 ns/op	   2234300 get_hits_total	    434279 sets_total	      20 B/op	       1 allocs/op
+BenchmarkStore_MixedWorkload/shards=16,_readRatio=90,_withEvict=true,_warmKeys=50000,_parallel=true-4         	 4105582	       380.4 ns/op	   2113996 get_hits_total	    411149 sets_total	      20 B/op	       1 allocs/op
+BenchmarkStore_MixedWorkload/shards=16,_readRatio=90,_withEvict=true,_warmKeys=50000,_parallel=true-8         	 3156848	       440.9 ns/op	   1626001 get_hits_total	    315930 sets_total	      21 B/op	       1 allocs/op
+BenchmarkStore_MixedWorkload/shards=16,_readRatio=50,_withEvict=true,_warmKeys=50000,_parallel=true           	 2636602	       481.3 ns/op	    707383 get_hits_total	   1317450 sets_total	      41 B/op	       2 allocs/op
+BenchmarkStore_MixedWorkload/shards=16,_readRatio=50,_withEvict=true,_warmKeys=50000,_parallel=true-4         	 1789630	       577.9 ns/op	    479334 get_hits_total	    895575 sets_total	      42 B/op	       2 allocs/op
+BenchmarkStore_MixedWorkload/shards=16,_readRatio=50,_withEvict=true,_warmKeys=50000,_parallel=true-8         	 1867611	       618.8 ns/op	    500821 get_hits_total	    933528 sets_total	      42 B/op	       2 allocs/op
+BenchmarkStore_MixedWorkload/shards=16,_readRatio=10,_withEvict=true,_warmKeys=50000,_parallel=true           	 1696778	       699.0 ns/op	     88615 get_hits_total	   1527041 sets_total	      63 B/op	       3 allocs/op
+BenchmarkStore_MixedWorkload/shards=16,_readRatio=10,_withEvict=true,_warmKeys=50000,_parallel=true-4         	 1555923	       775.9 ns/op	     81567 get_hits_total	   1400134 sets_total	      63 B/op	       3 allocs/op
+BenchmarkStore_MixedWorkload/shards=16,_readRatio=10,_withEvict=true,_warmKeys=50000,_parallel=true-8         	 1437884	       881.3 ns/op	     75570 get_hits_total	   1293777 sets_total	      64 B/op	       3 allocs/op
+BenchmarkStore_MixedWorkload/shards=16,_readRatio=90,_withEvict=false,_warmKeys=50000,_parallel=false         	 8444376	       123.5 ns/op	   7599812 get_hits_total	    844564 sets_total	      18 B/op	       1 allocs/op
+BenchmarkStore_MixedWorkload/shards=16,_readRatio=90,_withEvict=false,_warmKeys=50000,_parallel=false-4       	 9886299	       107.5 ns/op	   8897723 get_hits_total	    988576 sets_total	      18 B/op	       1 allocs/op
+BenchmarkStore_MixedWorkload/shards=16,_readRatio=90,_withEvict=false,_warmKeys=50000,_parallel=false-8       	 9864978	       125.6 ns/op	   8878469 get_hits_total	    986509 sets_total	      18 B/op	       1 allocs/op
+PASS
+ok  	github.com/amakane-hakari/kavos/internal/store	51.492s
